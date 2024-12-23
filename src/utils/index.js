@@ -1,6 +1,17 @@
 import { Lunar, Solar } from 'lunar-javascript'
+import cloneDeep from 'lodash/cloneDeep.js'
 import { selfDayjs } from './set-def-dayjs.js'
-import { config } from '../../config/index.js'
+import config from '../../config/exp-config.js'
+/** @type {{
+ * id: number,
+ * pid: number,
+ * city_code: string,
+ * city_name: string,
+ * post_code: string,
+ * area_code: string,
+ * ctime: string
+ * }[]} */
+import { WEATHER_CITY } from '../store/index.js'
 
 /**
  * 驼峰转下划线
@@ -20,7 +31,7 @@ export const toLowerLine = (str) => {
  * @returns
  */
 export const getColor = () => {
-  if (!config.IS_SHOW_COLOR) {
+  if (config.IS_SHOW_COLOR === false) {
     return undefined
   }
   return `#${Math.floor(Math.random() * 0xffffff).toString(16).padEnd(6, '0')}`
@@ -40,6 +51,7 @@ export const randomNum = (min, max) => Math.floor(Math.random() * (max - min + 1
  * @returns
  */
 export const sortBirthdayTime = (list) => {
+  list = cloneDeep(list)
   list.forEach((item) => {
     const { type } = item
     item.useLunar = /^\*/.test(type)
@@ -84,3 +96,50 @@ export const getConstellation = (date) => {
     en: constellationEn[constellationCn.indexOf(cn)],
   }
 }
+
+/**
+ * 获取天气城市信息
+ * @param province {String}
+ * @param city {String}
+ */
+export const getWeatherCityInfo = (province, city) => {
+  let prov = null
+  if (province) {
+    const provName = province.replace(/[省市]$/, '')
+    prov = WEATHER_CITY.find((it) => it.city_name.indexOf(provName) !== -1)
+  }
+  if (!prov) {
+    console.log(`您当前填写的province: 【${province}】, 找不到该城市或省份，城市天气可能会因此不准确。请知悉 `)
+  }
+
+  // 如果找到父级地区，则在父级地区中找
+  if (city) {
+    const cName = city.replace(/[市区县]$/, '')
+    // 先后顺序县 => 区 => 市 => 无
+    for (const name of '县|区|市|'.split('|')) {
+      const c = WEATHER_CITY.find((it) => {
+        if (prov) {
+          return it.pid === prov.id && it.city_name === `${cName}${name}`
+        }
+        return it.city_name === `${cName}${name}`
+      })
+      if (c) {
+        return c
+      }
+    }
+  }
+
+  // city 找不到，那就返回prov的
+  if (prov && prov.city_code) {
+    return prov
+  }
+
+  return null
+}
+
+/**
+ * 带promise的sleep
+ * @param time
+ * @returns {Promise<unknown>}
+ */
+export const sleep = (time) => new Promise((resolve) => { setTimeout(resolve, time) })
